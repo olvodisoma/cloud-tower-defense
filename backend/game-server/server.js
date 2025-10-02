@@ -43,6 +43,7 @@ io.on('connection', (socket) => {
 
 // Indítás
 const PORT = process.env.GAME_PORT || 4000;
+const PUBLIC_IP = process.env.PUBLIC_IP || '3.65.97.92';
 server.listen(PORT, () => {
-  console.log(`Game-server fut a http://localhost:${PORT} címen`);
+  console.log(`Game-server fut a http://${PUBLIC_IP}:${PORT} címen`);
 });
