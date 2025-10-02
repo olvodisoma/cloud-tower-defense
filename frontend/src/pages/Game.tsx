@@ -1,5 +1,5 @@
 // src/pages/Game.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { MainScene } from '../game/scenes/MainScene';
 import { WsClient } from '../game/ws/client';
@@ -8,6 +8,8 @@ import { BuildPanel } from '../components/Buidpanel.tsx'; // ✅ helyes import
 
 export default function Game() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ x: number; y: number } | null>(null);
   const { user, match } = useStore();
 
   // Phaser indítás
@@ -24,25 +26,55 @@ export default function Game() {
     return () => game.destroy(true);
   }, []);
 
-  // WS kapcsolat
+
   useEffect(() => {
-    const ws = new WsClient(import.meta.env.VITE_WS_URL);
-    ws.connect();
-    if (user && match.matchId) {
-      const off = ws.onMessage((m) => {
-        if (m.type === 'state') {
-          // TODO: diff alkalmazása
-        }
-      });
-      ws.send({ type: 'join_match', matchId: match.matchId!, token: user.token });
-      return () => off();
-    }
-  }, [user, match.matchId]);
+  if (!gameRef.current) return;
+
+  const g = gameRef.current;
+  const onSlotClick = (data: { x: number; y: number }) => {
+    console.log('Slot selected:', data);
+    setSelectedSlot(data);
+  };
+
+  g.events.on('slot:click', onSlotClick);
+
+  // ✅ nincs visszatérési érték
+  return () => {
+    g.events.off('slot:click', onSlotClick);
+  };
+  }, []);
+
+  // WS kapcsolat
+useEffect(() => {
+  const ws = new WsClient(import.meta.env.VITE_WS_URL);
+  ws.connect();
+
+  if (user && match.matchId) {
+    const off = ws.onMessage((m) => {
+      if (m.type === 'state') {
+        // TODO: diff alkalmazása
+      }
+    });
+    ws.send({ type: 'join_match', matchId: match.matchId!, token: user.token });
+
+    return () => {               // ⬅ blokk
+      off();                     // ⬅ csak meghívjuk, nem "return”-öljük
+      //(ws as any).close?.();     // opcionális: lezárjuk a WS-t
+    };
+  }
+}, [user, match.matchId]);
+
+
+
 
   // Build gomb kezelő
   function handleBuild(type: string) {
-    console.log('Build tower:', type);
-    // TODO: kiválasztott slot + ws.send({ type:'build_tower', slotId, towerType: type })
+    if (!selectedSlot) {
+      console.log('Nincs slot kijelölve!');
+      return;
+    }
+    console.log('Építés:', type, 'slotra:', selectedSlot);
+    // később: ws.send({ type: 'build_tower', slotId: ..., towerType: type })
   }
 
 
