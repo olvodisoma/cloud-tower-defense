@@ -2,124 +2,83 @@
 import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { MainScene } from '../game/scenes/MainScene';
-import { WsClient } from '../game/ws/client';
-import { useStore } from '../app/store';
-import { BuildPanel } from '../components/Buidpanel.tsx'; // ✅ helyes import
+import { BuildPanel } from '../components/Buidpanel'; // <-- NINCS .tsx a végén
 
 export default function Game() {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ x: number; y: number } | null>(null);
-  const { user, match } = useStore();
 
-  // Phaser indítás
+  // 1) Phaser indítása + FELIRATKOZÁS UGYANITT
   useEffect(() => {
     if (!containerRef.current) return;
+
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       width: 800,
       height: 600,
-      parent: containerRef.current, // ✅ ide mountol a canvas
+      parent: containerRef.current,
       backgroundColor: '#111',
       scene: [MainScene],
     });
-    return () => game.destroy(true);
-  }, []);
+    gameRef.current = game; // <-- EDDIG hiányzott
 
-
-  useEffect(() => {
-  if (!gameRef.current) return;
-
-  const g = gameRef.current;
-  const onSlotClick = (data: { x: number; y: number }) => {
-    console.log('Slot selected:', data);
-    setSelectedSlot(data);
-  };
-
-  g.events.on('slot:click', onSlotClick);
-
-  // ✅ nincs visszatérési érték
-  return () => {
-    g.events.off('slot:click', onSlotClick);
-  };
-  }, []);
-
-  // WS kapcsolat
-useEffect(() => {
-  const ws = new WsClient(import.meta.env.VITE_WS_URL);
-  ws.connect();
-
-  if (user && match.matchId) {
-    const off = ws.onMessage((m) => {
-      if (m.type === 'state') {
-        // TODO: diff alkalmazása
-      }
-    });
-    ws.send({ type: 'join_match', matchId: match.matchId!, token: user.token });
-
-    return () => {               // ⬅ blokk
-      off();                     // ⬅ csak meghívjuk, nem "return”-öljük
-      //(ws as any).close?.();     // opcionális: lezárjuk a WS-t
+    const onSlotClick = (data: { x: number; y: number }) => {
+      console.log('Slot selected:', data);
+      setSelectedSlot(data);
     };
-  }
-}, [user, match.matchId]);
+    game.events.on('slot:click', onSlotClick); // <-- biztosan feliratkozunk
 
+    return () => {
+      game.events.off('slot:click', onSlotClick);
+      game.destroy(true);
+      gameRef.current = null;
+    };
+  }, []);
 
-
-
-  // Build gomb kezelő
   function handleBuild(type: string) {
     if (!selectedSlot) {
-      console.log('Nincs slot kijelölve!');
+      console.log('Nincs kijelölt slot – kattints a pályán egy négyzetre.');
       return;
     }
-    console.log('Építés:', type, 'slotra:', selectedSlot);
-    // később: ws.send({ type: 'build_tower', slotId: ..., towerType: type })
+    console.log('Építés:', type, 'ide:', selectedSlot);
+    // TODO: ws.send({ type:'build_tower', slotId: ..., towerType: type })
   }
 
-
-
-  
-
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 800px 1fr', gap: 16 }}>
-      <aside>{/* (opció) ide jöhet más UI */}</aside>
+    <div style={{ position: 'relative', width: 800, height: 600, border: '1px solid #333' }}>
+      {/* Phaser vászon */}
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
 
-      {/* Középső oszlop: Phaser + overlay panel */}
-      <div style={{ position: 'relative', width: 800, height: 600, border: '1px solid #333' }}>
-        {/* Phaser vászon */}
-        <div
-          ref={containerRef}
-          style={{ position: 'absolute', inset: 0, zIndex: 0 }}
-        />
-        {/* Overlay réteg (panel a vászon fölött) */}
+      {/* Panel a vászon fölött */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 10,
+          pointerEvents: 'none',
+          color: '#fff',
+          fontFamily: 'sans-serif',
+        }}
+      >
         <div
           style={{
             position: 'absolute',
-            inset: 0,
-            zIndex: 10,
-            pointerEvents: 'none', // minden katt átmegy, kivéve ahol auto
+            top: 16,
+            right: 16,
+            background: 'rgba(0,0,0,0.6)',
+            padding: 12,
+            borderRadius: 8,
+            minWidth: 160,
+            pointerEvents: 'auto',
           }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              background: 'rgba(0,0,0,0.6)',
-              color: '#fff',
-              padding: 12,
-              borderRadius: 8,
-              minWidth: 160,
-              pointerEvents: 'auto', // a gombok kattinthatók
-            }}
-          >
-            <BuildPanel onBuild={handleBuild} />
+          <BuildPanel onBuild={handleBuild} />
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+            Kijelölt slot: {selectedSlot ? `x=${selectedSlot.x}, y=${selectedSlot.y}` : 'nincs'}
           </div>
         </div>
       </div>
-
-      <aside>{/* (opció) Send Wave panel helye */}</aside>
     </div>
   );
 }

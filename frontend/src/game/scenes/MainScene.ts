@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 export class MainScene extends Phaser.Scene {
+  constructor() { super('MainScene'); } // ← opcionális, de hasznos
   private pathY = 300; // központi út Y koordináta
 
   create() {
